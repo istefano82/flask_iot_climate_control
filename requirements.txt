@@ -1,0 +1,7 @@
+Flask==2.2.2
+celery==5.2.7
+redis==4.4.0
+flower==1.2.0
+Flask-Migrate==4.0.0
+Flask-SQLAlchemy==3.0.2
+Werkzeug==2.2.2
