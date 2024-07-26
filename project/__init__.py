@@ -1,15 +1,18 @@
 import os
 
 from flask import Flask
+from flask_celeryext import FlaskCeleryExt  # new
 from flask_migrate import Migrate
 from flask_sqlalchemy import SQLAlchemy
 
+from project.celery_utils import make_celery  # new
 from project.config import config
 
 
 # instantiate the extensions
 db = SQLAlchemy()
 migrate = Migrate()
+ext_celery = FlaskCeleryExt(create_celery_app=make_celery)  # new
 
 
 def create_app(config_name=None):
@@ -25,8 +28,8 @@ def create_app(config_name=None):
     # set up extensions
     db.init_app(app)
     migrate.init_app(app, db)
+    ext_celery.init_app(app)  # new
 
-    # new
     # register blueprints
     from project.commands import commands_blueprint
     app.register_blueprint(commands_blueprint)
