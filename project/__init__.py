@@ -1,4 +1,6 @@
 import os
+import logging
+from logging.config import dictConfig
 
 from flask import Flask
 from flask_celeryext import FlaskCeleryExt  # new
@@ -14,10 +16,41 @@ db = SQLAlchemy()
 migrate = Migrate()
 ext_celery = FlaskCeleryExt(create_celery_app=make_celery)  # new
 
+def _configure_logger(config):
+    """Configure application logging."""
+    return {
+        'version': 1,
+        'formatters': {'default': {
+            'format': '[%(asctime)s] %(levelname)s in func %(module)s %(funcName)s line %(lineno)s %(threadName)s: %(message)s',
+        }},
+        'disable_existing_loggers': False,
+        'handlers': {
+        'wsgi': {
+            'class': 'logging.StreamHandler',
+            'stream': 'ext://flask.logging.wsgi_errors_stream',
+            'formatter': 'default'
+        },
+
+        'file.handler': {
+            'class': 'logging.FileHandler',
+            'filename': config.LOG_PATH,
+            'level': 'DEBUG',
+            'formatter': 'default'
+            }
+           },
+
+        'root': {
+            'level': config.LOG_LEVEL,
+            'filename': config.LOG_PATH,
+            'handlers': ['wsgi', 'file.handler']
+        }
+    }
+
 
 def create_app(config_name=None):
     if config_name is None:
         config_name = os.environ.get("FLASK_CONFIG", "development")
+    logging.config.dictConfig(_configure_logger(config[config_name]))
 
     # instantiate the app
     app = Flask(__name__)
