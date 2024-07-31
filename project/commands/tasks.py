@@ -3,6 +3,8 @@ import logging
 import requests
 import os
 
+from project import db
+from project.commands.models import StatusMessage
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ def process_lost_commands():
     """Processes lost commands in a non-blocking manner."""
     lost_commands = find_lost_messages()
     for lost_command in lost_commands:
-        result = StatusMessage(aircon_command=lost_command, status="LOST").save()
+        result = StatusMessage(aircon_command=lost_command, status="LOST")
+        db.session.add(result)
+        db.session.commit()
         logger.debug(f'Created status message result {result} for {lost_command}')
         send_status(lost_command.uid, "LOST")

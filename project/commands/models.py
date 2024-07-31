@@ -4,9 +4,8 @@ from enum import Enum
 
 class StatusMessageEnum(Enum):
     LOST = "LOST"
-    CONNECTED = "CONNECTED"
-    RUNNING = "RUNNING"
-    FINISHED = "FINISHED"
+    MATCH = "MATCH"
+    MISMATCH = "MISMATCH"
 
 
 class AirConCommand(db.Model):

@@ -57,7 +57,8 @@ def create_app(config_name=None):
 
     # set config
     app.config.from_object(config[config_name])
-
+    from .cache import cache
+    cache.init_app(app, config=app.config)
     # set up extensions
     db.init_app(app)
     migrate.init_app(app, db)
