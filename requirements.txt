@@ -9,3 +9,4 @@ Flask-CeleryExt==0.4.3
 psycopg2-binary==2.9.5
 requests==2.32.3
 Flask-Caching==2.3.0
+flask-mqtt==1.2.1
