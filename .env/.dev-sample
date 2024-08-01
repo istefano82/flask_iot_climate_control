@@ -13,3 +13,6 @@ CACHE_DEFAULT_TIMEOUT=500`
 CACHE_KEY_PREFIX=living_homes_cache_server
 LOG_LEVEL=DEBUG
 LOG_PATH=/var/log/living_homes_app.log
+MQTT_BROKER_URL=localhost
+MQTT_BROKER_PORT=1883
+MQTT_REFRESH_TIME=1.0  # refresh time in seconds

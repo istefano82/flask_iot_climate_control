@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from werkzeug.exceptions import abort
 from project import create_app, ext_celery
@@ -8,10 +9,13 @@ from project.cache import cache
 
 from project.commands.tasks import send_status, process_lost_commands
 
-
-
 app = create_app()
 celery = ext_celery.celery
+
+from flask_mqtt import Mqtt
+
+mqtt = Mqtt(app)
+
 
 @app.route("/")
 def hello_world():
@@ -52,13 +56,15 @@ def create_air_conditioner_command():
                 # Create a StatusMessage model instance
                 # Update the status message
                 if matching_message.temperature == ac_command.temperature:
-                    status_message = StatusMessage(aircon_command_id=ac_command.id, sensor_message_id=matching_message.id, status="MATCH")
-                    current_app.logger.info("status_message.status is MATCH")
+                    status_message = StatusMessage(aircon_command_id=ac_command.id,
+                                                   sensor_message_id=matching_message.id, status="MATCH")
+                    current_app.app.info("status_message.status is MATCH")
                 else:
-                    status_message = StatusMessage(aircon_command_id=ac_command.id, sensor_message_id=matching_message.id,
+                    status_message = StatusMessage(aircon_command_id=ac_command.id,
+                                                   sensor_message_id=matching_message.id,
                                                    status="MISMATCH")
-                    current_app.logger.info("status_message.status is MISMATCH")
-                current_app.logger.info(f'Creating status message {status_message}')
+                    current_app.app.info("status_message.status is MISMATCH")
+                current_app.app.info(f'Creating status message {status_message}')
                 db.session.add(status_message)
                 db.session.commit()
                 current_app.logger.info(f"Status message saved to database object is {status_message}")
@@ -68,3 +74,91 @@ def create_air_conditioner_command():
         except Exception as e:
             current_app.logger.error(f"Error processing ac command: {e}")
             abort(500, f"Error processing ac command: {e}")
+
+
+@mqtt.on_connect()
+def connect(client, flags: int, rc: int, properties):
+    mqtt.subscribe("sensor/temperature", qos=1)
+    app.logger.debug("MQTT client connected")
+
+
+
+@mqtt.on_message()
+def sensor_temperature_handler(client, userdata, message):
+    """
+    Handles incoming temperature sensor messages from the MQTT topic "/sensor/temperature".
+
+    Parses the message payload, creates a TemperatureSensorMessage model instance, saves it to the database,
+    and checks for a matching AirConditionerCommand. If a match is found, it creates a StatusMessage
+    with the appropriate status (MATCH, MISMATCH) and sends it to the Status service. If message payload is empty dict,
+    it creates a StatusMessage with the status LOST and sends it to the Status service.
+
+
+    Args:
+        client (MQTTClient): The MQTT client instance.
+        topic (str): The MQTT topic the message was received on.
+        payload (bytes): The message payload.
+        qos (int): The Quality of Service level for the message.
+        properties (Any): Additional MQTT message properties.
+
+    Raises:
+        HTTPException: If there is an error parsing the message payload or processing the message.
+
+    Returns:
+        None
+    """
+    app.logger.debug(f'New message received with payload {message.payload}')
+    try:
+        data = json.loads(message.payload.decode())
+    except Exception as e:
+        app.logger.error("Error parsing message payload.".format(message.payload), exc_info=True)
+        raise
+    if data:
+        try:
+            # Create an AirConditionerCommand model instance
+            with app.app_context():
+                sensor_message = TemperatureSensorMessage(uid=data['id'], temperature=data['temp'])
+
+                app.logger.info(f"Temperature sensor message is {sensor_message}")
+                db.session.add(sensor_message)
+                db.session.commit()
+                app.logger.info(f"Temperature sensor message saved to database object is {sensor_message}")
+                # Check for a matching message
+                matching_ac_command = AirConCommand.query.filter_by(uid=sensor_message.uid).first()
+                app.logger.info(f"Matching ac command is {matching_ac_command}")
+                if matching_ac_command:
+                    # Create a StatusMessage model instance
+                    if matching_ac_command.temperature == sensor_message.temperature:
+                        status_message = StatusMessage(aircon_command_id=matching_ac_command.id,
+                                                       sensor_message_id=sensor_message.id, status="MATCH")
+                        app.logger.info("status_message.status is MATCH")
+                    else:
+                        status_message = StatusMessage(aircon_command_id=matching_ac_command.id,
+                                                       sensor_message_id=sensor_message.id,
+                                                       status="MISMATCH")
+
+                    db.session.add(status_message)
+                    db.session.commit()
+                    app.logger.info(f"Saved status_message to DB with result {status_message}")
+                    # send_status.delay(sensor_message.uid, status_message.status)
+                    send_status(sensor_message.uid, status_message.status)
+        except KeyError:
+            app.logger.error(f"Invalid message payload: {data}")
+            return
+        except Exception:
+            app.logger.error('Error processing temperature sensor message with data {}'.format(data))
+            raise
+    else:
+        # Last message received
+        app.logger.info('Empty payload indicates last message received. Start processing unmatched data.')
+        last_ac_message = cache.get("ac_last_message")
+        if last_ac_message:
+            app.logger.info(f'Last ac message found {last_ac_message}')
+            # Create a task to process lost commands in the background
+            process_lost_commands.delay()
+            cache.delete("ac_last_message")
+        else:
+            app.logger.info(f'No last ac message found, saving last temperature sensor message')
+            cache.set("t_sensor_last_message", True, timeout=1800)
+            app.logger.debug(f"Last Temp Sensor message saved to cache {cache.get('t_sensor_last_message')}")
+        return

@@ -21,7 +21,7 @@ def divide(x, y):
 def send_status(uid, status):
     """Send a status message to the Status service."""
     logger.info(f'Sending status message with uid {uid} and status {status}')
-    data = {"uid": uid, "status": status}
+    data = {"uid": uid, "status": status.value}
     try:
         response = requests.post(os.getenv('STATUS_SERVICE_URL', 'http://localhost:8080/api/v1/status'), json=data)
         logger.info(f'Response is {response}')
