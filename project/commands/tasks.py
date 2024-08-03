@@ -6,7 +6,9 @@ import os
 from project import db
 from project.commands.models import StatusMessage, AirConCommand
 
-logger = logging.getLogger(__name__)
+from flask import request, jsonify, current_app
+
+# logger = logging.getLogger(__name__)
 
 
 
@@ -18,18 +20,20 @@ def divide(x, y):
     return x / y
 
 
-@shared_task()
+@shared_task(ignore_result=True)
 def send_status(uid, status):
     """Send a status message to the Status service."""
-    logger.info(f'Sending status message with uid {uid} and status {status}')
-    data = {"uid": uid, "status": status}
-    try:
-        response = requests.post(os.getenv('STATUS_SERVICE_URL', 'http://localhost:8080/api/v1/status'), json=data)
-        logger.info(f'Response is {response}')
-        if response.status_code != 200:
-            logger.error(f"Error sending status message: {response.text}")
-    except Exception as e:
-        logger.error(f"Error sending status message: {e}")
+    from app import app
+    with app.app_context():
+        current_app.logger.info(f'Sending status message with uid {uid} and status {status}')
+        data = {"uid": uid, "status": status}
+        try:
+            response = requests.post(os.getenv('STATUS_SERVICE_URL', 'http://localhost:8080/api/v1/status'), json=data)
+            current_app.logger.info(f'Response is {response}')
+            if response.status_code != 200:
+                current_app.logger.error(f"Error sending status message: {response.text}")
+        except Exception as e:
+            current_app.logger.error(f"Error sending status message: {e}")
 
 
 def find_lost_messages():
@@ -54,12 +58,16 @@ def find_lost_messages():
 @shared_task(ignore_result=True)
 def process_lost_commands():
     """Processes lost commands in a non-blocking manner."""
-    lost_commands = find_lost_messages()
     from app import app
     with app.app_context():
+        import time
+        time.sleep(5)
+        app.logger.debug('SLeeping 10 seconds')
+        lost_commands = find_lost_messages()
+
         for lost_command in lost_commands:
             result = StatusMessage(aircon_command_id=lost_command.id, sensor_message_id=None, status="LOST")
             db.session.add(result)
             db.session.commit()
-            logger.debug(f'Created status message result {result} for {lost_command}')
-            send_status(lost_command.uid, result.status.value)
+            app.logger.debug(f'Created status message result {result} for {lost_command}')
+            send_status(lost_command.uid, result.status)

@@ -33,6 +33,7 @@ def create_air_conditioner_command():
                 if last_sensor_message:
                     current_app.logger.debug(f'Last sensor message found {last_sensor_message}')
                     process_lost_commands.delay()
+                    # process_lost_commands()
                     cache.delete("t_sensor_last_message")
                 else:
                     current_app.logger.debug('No last sensor message found, saving last AC command')
@@ -58,28 +59,27 @@ def create_air_conditioner_command():
                 if matching_message.temperature == ac_command.temperature:
                     status_message = StatusMessage(aircon_command_id=ac_command.id,
                                                    sensor_message_id=matching_message.id, status="MATCH")
-                    current_app.app.info("status_message.status is MATCH")
+                    current_app.logger.info("status_message.status is MATCH")
                 else:
                     status_message = StatusMessage(aircon_command_id=ac_command.id,
                                                    sensor_message_id=matching_message.id,
                                                    status="MISMATCH")
-                    current_app.app.info("status_message.status is MISMATCH")
-                current_app.app.info(f'Creating status message {status_message}')
+                    current_app.logger.info("status_message.status is MISMATCH")
+                current_app.logger.info(f'Creating status message {status_message}')
                 db.session.add(status_message)
                 db.session.commit()
                 current_app.logger.info(f"Status message saved to database object is {status_message}")
-                # send_status.delay(ac_command.uid, status_message.status)
-
+                send_status.delay(ac_command.uid, status_message.status)
+                # send_status(ac_command.uid, status_message.status)
             return Response("Command received", 201)
         except Exception as e:
             current_app.logger.error(f"Error processing ac command: {e}")
             abort(500, f"Error processing ac command: {e}")
 
-
+# 
 @mqtt.on_connect()
-def connect(client, flags: int, rc: int, properties):
-    mqtt.subscribe("sensor/temperature", qos=1)
-    app.logger.debug("MQTT client connected")
+def handle_connect(client, userdata, flags, rc):
+    mqtt.subscribe('sensor/temperature')
 
 
 
@@ -112,8 +112,13 @@ def sensor_temperature_handler(client, userdata, message):
         data = json.loads(message.payload.decode())
     except Exception as e:
         app.logger.error("Error parsing message payload.".format(message.payload), exc_info=True)
-        raise
+        return
     if data:
+        if cache.get(data['id']) == data['temp']:
+            app.logger.debug(f"Message with {data['id']} already processed. Skipping.")
+            return
+        else:
+            cache.set(data['id'], data['temp'], timeout=1800)
         try:
             # Create an AirConditionerCommand model instance
             with app.app_context():
@@ -140,14 +145,14 @@ def sensor_temperature_handler(client, userdata, message):
                     db.session.add(status_message)
                     db.session.commit()
                     app.logger.info(f"Saved status_message to DB with result {status_message}")
-                    # send_status.delay(sensor_message.uid, status_message.status)
-                    send_status(sensor_message.uid, status_message.status)
+                    send_status.delay(sensor_message.uid, status_message.status)
+                    # send_status(sensor_message.uid, status_message.status)
         except KeyError:
             app.logger.error(f"Invalid message payload: {data}")
             return
         except Exception:
             app.logger.error('Error processing temperature sensor message with data {}'.format(data))
-            raise
+            return
     else:
         # Last message received
         app.logger.info('Empty payload indicates last message received. Start processing unmatched data.')
@@ -156,6 +161,7 @@ def sensor_temperature_handler(client, userdata, message):
             app.logger.info(f'Last ac message found {last_ac_message}')
             # Create a task to process lost commands in the background
             process_lost_commands.delay()
+            # process_lost_commands()
             cache.delete("ac_last_message")
         else:
             app.logger.info(f'No last ac message found, saving last temperature sensor message')

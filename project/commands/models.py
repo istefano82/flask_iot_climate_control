@@ -32,7 +32,7 @@ class TemperatureSensorMessage(db.Model):
 
 class StatusMessage(db.Model):
     id: int = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    status: str = db.Column(db.Enum(StatusMessageEnum), nullable=False, default=StatusMessageEnum.LOST)
+    status: str = db.Column(db.String(128), nullable=False, default='LOST')
     sensor_message_id = db.Column(db.Integer, db.ForeignKey('temperature_sensor_message.id'))
     sensor_message = db.relationship('TemperatureSensorMessage', backref='status_messages')
     aircon_command_id = db.Column(db.Integer, db.ForeignKey('aircon_command.id'))

@@ -19,6 +19,10 @@ class BaseConfig:
     CACHE_REDIS_DB = os.environ.get('CACHE_REDIS_DB')
     CACHE_REDIS_URL = os.environ.get('CACHE_REDIS_URL')
     CACHE_DEFAULT_TIMEOUT = os.environ.get('CACHE_DEFAULT_TIMEOUT')
+    MQTT_BROKER_URL = 'host.docker.internal'
+    # MQTT_BROKER_URL = 'localhost'
+    MQTT_BROKER_PORT = 1883
+    MQTT_REFRESH_TIME = 1.0  # refresh time in seconds
 
 
 class DevelopmentConfig(BaseConfig):

@@ -13,7 +13,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - 5010:5000
+      - 8081:8081
     env_file:
       - .env/.dev-sample
     environment:
@@ -21,6 +21,9 @@ services:
     depends_on:
       - redis
       - db
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+
 
   db:
     image: postgres:14-alpine
@@ -49,23 +52,25 @@ services:
     depends_on:
       - redis
       - db
-
-  celery_beat:
-    build:
-      context: .
-      dockerfile: ./compose/local/flask/Dockerfile
-    image: flask_celery_example_celery_beat
-    command: /start-celerybeat
-    volumes:
-      - .:/app
-    env_file:
-      - .env/.dev-sample
-    environment:
-      - FLASK_APP=app
-    depends_on:
-      - redis
-      - db
-
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+#
+#  celery_beat:
+#    build:
+#      context: .
+#      dockerfile: ./compose/local/flask/Dockerfile
+#    image: flask_celery_example_celery_beat
+#    command: /start-celerybeat
+#    volumes:
+#      - .:/app
+#    env_file:
+#      - .env/.dev-sample
+#    environment:
+#      - FLASK_APP=app
+#    depends_on:
+#      - redis
+#      - db
+#
   flower:
     build:
       context: .
@@ -83,6 +88,8 @@ services:
     depends_on:
       - redis
       - db
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
 
 volumes:
   postgres_data:
