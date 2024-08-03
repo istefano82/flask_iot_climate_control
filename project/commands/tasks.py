@@ -62,7 +62,7 @@ def process_lost_commands():
     with app.app_context():
         import time
         time.sleep(5)
-        app.logger.debug('SLeeping 10 seconds')
+        app.logger.debug('Sleeping 5 seconds')
         lost_commands = find_lost_messages()
 
         for lost_command in lost_commands:
